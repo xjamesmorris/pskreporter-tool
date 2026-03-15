@@ -63,7 +63,7 @@ CSV_FIELDS = [
     "flow_start_seconds",
 ]
 
-__version__ = "0.1"
+__version__ = "0.2"
 
 API_BASE = "https://retrieve.pskreporter.info/query"
 USER_AGENT = (
