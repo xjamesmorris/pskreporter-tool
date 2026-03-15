@@ -63,6 +63,8 @@ CSV_FIELDS = [
     "flow_start_seconds",
 ]
 
+__version__ = "0.1"
+
 API_BASE = "https://retrieve.pskreporter.info/query"
 USER_AGENT = (
     "pskreporter-cli/1.0 "
@@ -158,6 +160,7 @@ def main() -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     parser.add_argument("callsign", help="Sender callsign to look up (e.g. N1DQ)")
     parser.add_argument(
         "-o", "--output",
