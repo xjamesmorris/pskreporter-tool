@@ -1,0 +1,47 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Running the Tool
+
+```bash
+python pskreporter.py <CALLSIGN> [options]
+```
+
+Options:
+- `-o, --output FILE` — write CSV to file (default: stdout)
+- `-t, --hours HOURS` — lookback window in hours (default: 6, max 6 per API limit)
+- `-m, --mode MODE` — filter by mode (e.g., FT8, FT4, PSK31)
+- `--band BAND` — filter by band in metres (e.g., 40, 20, 10)
+- `--test` — dry-run: print the request URL to stdout and exit without fetching
+
+No external dependencies — pure Python stdlib only.
+
+## Platform Compatibility
+
+All code must run identically on Linux, macOS, and Windows. Concretely:
+- Use `pathlib.Path` or `os.path` for file paths, never hardcoded `/` separators
+- Use `os.linesep` or the `newline=` parameter on `open()` consciously — the CSV writer already uses `newline=""` as required
+- Avoid shell-specific syntax or POSIX-only stdlib calls
+- Do not assume a particular Python launcher name (`python` vs `python3`) in documentation examples
+
+## Architecture
+
+Single-file script (`pskreporter.py`) implementing a linear pipeline:
+
+```
+CLI args → build_url() → fetch_xml() → parse_reports() → apply_filters() → sort/cap → write_csv()
+```
+
+**Key design decisions:**
+- Info/errors go to stderr; CSV data to stdout — follows Unix convention for pipeline composability
+- Filtering (`--mode`, `--band`) is client-side after fetching full results from the API
+- Reports are capped at 100 (API maximum), sorted by timestamp descending
+- Band assignment uses hardcoded `BAND_EDGES_HZ` frequency ranges
+- `parse_reports()` does frequency→int, epoch→UTC ISO, and band computation all in one pass
+- API requests use a custom User-Agent; the API endpoint is `API_BASE` at the top of the file
+
+**Error handling:**
+- Network errors: caught, reported to stderr, exit code 1
+- Malformed XML records: skipped with debug output rather than aborting
+- Invalid timestamps: treated as empty strings
