@@ -26,11 +26,14 @@ Notes:
 
 import argparse
 import csv
+import json
 import sys
+import time
 import urllib.request
 import urllib.parse
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
+from pathlib import Path
 
 # Band edges in Hz for common amateur bands
 BAND_EDGES_HZ = {
@@ -65,12 +68,52 @@ CSV_FIELDS = [
 
 __version__ = "0.2"
 
+COOLDOWN_SECONDS = 300  # pskreporter.info asks for at least 5 minutes between queries
+
 API_BASE = "https://retrieve.pskreporter.info/query"
 USER_AGENT = (
     "pskreporter-cli/1.0 "
     "(python fetch script; single query; "
     "contact: user of this script)"
 )
+
+
+def _state_path() -> Path:
+    """Return the path to the local state file, creating its directory if needed."""
+    state_dir = Path.home() / ".pskreporter"
+    state_dir.mkdir(parents=True, exist_ok=True)
+    return state_dir / "state.json"
+
+
+def check_rate_limit() -> None:
+    """Print a warning and exit if fewer than 5 minutes have passed since the last query."""
+    path = _state_path()
+    if not path.exists():
+        return
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        last_ts = float(data.get("last_query", 0))
+    except (json.JSONDecodeError, ValueError, OSError):
+        return
+    elapsed = time.time() - last_ts
+    if elapsed < COOLDOWN_SECONDS:
+        remaining = int(COOLDOWN_SECONDS - elapsed)
+        mins, secs = divmod(remaining, 60)
+        print(
+            f"[warning] pskreporter.info requires a 5-minute cooldown between queries. "
+            f"Please wait {mins}m {secs}s before running again.",
+            file=sys.stderr,
+        )
+        sys.exit(0)
+
+
+def record_query() -> None:
+    """Save the current time as the last query timestamp."""
+    path = _state_path()
+    try:
+        path.write_text(json.dumps({"last_query": time.time()}), encoding="utf-8")
+    except OSError as exc:
+        print(f"[warning] Could not write state file: {exc}", file=sys.stderr)
 
 
 def freq_to_band(freq_hz: int) -> str:
@@ -205,7 +248,10 @@ def main() -> None:
         print(url)
         return
 
+    check_rate_limit()
+
     print(f"[info] Fetching: {url}", file=sys.stderr)
+    record_query()
 
     try:
         xml_text = fetch_xml(url)

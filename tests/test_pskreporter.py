@@ -2,16 +2,27 @@
 
 import csv
 import io
+import json
 import os
 import sys
 import tempfile
+import time
 from datetime import datetime
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
 sys.path.insert(0, str(__import__("pathlib").Path(__file__).parent.parent))
 import pskreporter
+
+
+@pytest.fixture(autouse=True)
+def isolated_state(tmp_path):
+    """Redirect the state file to a temp directory for every test."""
+    state_file = tmp_path / "state.json"
+    with patch("pskreporter._state_path", return_value=state_file):
+        yield state_file
 
 
 SAMPLE_XML = """\
@@ -328,3 +339,76 @@ def test_main_output_sorted_newest_first():
         assert timestamps == sorted(timestamps, reverse=True)
     finally:
         os.unlink(path)
+
+
+# ---------------------------------------------------------------------------
+# rate limiting — check_rate_limit / record_query
+# ---------------------------------------------------------------------------
+
+def test_check_rate_limit_no_state_file_passes(isolated_state):
+    # No state file exists yet — should not raise or exit
+    assert not isolated_state.exists()
+    pskreporter.check_rate_limit()  # must not raise or call sys.exit
+
+
+def test_record_query_creates_state_file(isolated_state):
+    pskreporter.record_query()
+    assert isolated_state.exists()
+    data = json.loads(isolated_state.read_text())
+    assert "last_query" in data
+    assert abs(data["last_query"] - time.time()) < 5
+
+
+def test_check_rate_limit_blocks_within_cooldown(isolated_state, capsys):
+    # Write a timestamp that is only 60 seconds old
+    isolated_state.write_text(json.dumps({"last_query": time.time() - 60}))
+    with pytest.raises(SystemExit) as exc:
+        pskreporter.check_rate_limit()
+    assert exc.value.code == 0
+    assert "wait" in capsys.readouterr().err.lower()
+
+
+def test_check_rate_limit_allows_after_cooldown(isolated_state):
+    # Write a timestamp that is older than the cooldown
+    isolated_state.write_text(
+        json.dumps({"last_query": time.time() - pskreporter.COOLDOWN_SECONDS - 1})
+    )
+    pskreporter.check_rate_limit()  # must not raise or call sys.exit
+
+
+def test_check_rate_limit_warning_includes_time_remaining(isolated_state, capsys):
+    isolated_state.write_text(json.dumps({"last_query": time.time() - 60}))
+    with pytest.raises(SystemExit):
+        pskreporter.check_rate_limit()
+    err = capsys.readouterr().err
+    # Should mention minutes and seconds
+    assert "m " in err and "s" in err
+
+
+def test_check_rate_limit_survives_corrupt_state_file(isolated_state):
+    isolated_state.write_text("not valid json {{{")
+    pskreporter.check_rate_limit()  # must not raise
+
+
+def test_main_records_query_on_successful_fetch(isolated_state):
+    with patch("sys.argv", ["pskreporter.py", "N1DQ"]):
+        with patch("pskreporter.fetch_xml", return_value=SAMPLE_XML):
+            pskreporter.main()
+    assert isolated_state.exists()
+
+
+def test_main_test_flag_skips_rate_limit(isolated_state):
+    # --test exits before touching the state file
+    with patch("sys.argv", ["pskreporter.py", "N1DQ", "--test"]):
+        pskreporter.main()
+    assert not isolated_state.exists()
+
+
+def test_main_blocked_by_rate_limit(isolated_state, capsys):
+    isolated_state.write_text(json.dumps({"last_query": time.time() - 30}))
+    with patch("sys.argv", ["pskreporter.py", "N1DQ"]):
+        with patch("pskreporter.fetch_xml", return_value=SAMPLE_XML) as mock_fetch:
+            with pytest.raises(SystemExit) as exc:
+                pskreporter.main()
+    assert exc.value.code == 0
+    mock_fetch.assert_not_called()
