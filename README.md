@@ -1,6 +1,6 @@
 # pskreporter-tool
 
-A command-line tool that fetches reception reports for an amateur radio callsign from [pskreporter.info](https://pskreporter.info) and outputs them as CSV.
+A command-line tool that fetches reception reports for an amateur radio callsign from [pskreporter.info](https://pskreporter.info) and outputs them as CSV or JSON.
 
 No external dependencies — pure Python standard library only.
 
@@ -22,6 +22,7 @@ python pskreporter.py <CALLSIGN> [options]
 | `-t, --hours HOURS` | Look back this many hours (default: 6, max 6) |
 | `-m, --mode MODE` | Filter by mode, e.g. `FT8`, `FT4`, `PSK31` |
 | `--band METRES` | Filter by band in metres, e.g. `40`, `20`, `10` |
+| `--json` | Output as a JSON array instead of CSV |
 | `--test` | Dry-run: print the request URL and exit without fetching |
 | `--version` | Show version and exit |
 
@@ -39,11 +40,19 @@ python pskreporter.py VK2ABC --hours 2
 
 # Preview the URL that would be fetched
 python pskreporter.py N1DQ --test
+
+# Output as JSON instead of CSV
+python pskreporter.py N1DQ --json
+
+# Save JSON output to a file
+python pskreporter.py W1AW --mode FT8 --json -o reports.json
 ```
 
 ## Output
 
-CSV with columns: `timestamp_utc`, `sender_callsign`, `sender_locator`, `receiver_callsign`, `receiver_locator`, `frequency_hz`, `band_m`, `mode`, `snr_db`, `receiver_dxcc`, `receiver_dxcc_code`, `flow_start_seconds`
+By default, output is CSV with columns: `timestamp_utc`, `sender_callsign`, `sender_locator`, `receiver_callsign`, `receiver_locator`, `frequency_hz`, `band_m`, `mode`, `snr_db`, `receiver_dxcc`, `receiver_dxcc_code`, `flow_start_seconds`
+
+With `--json`, output is a JSON array of objects with the same fields.
 
 Reports are sorted newest-first, capped at 100 (the API maximum).
 
