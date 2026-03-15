@@ -263,6 +263,41 @@ def test_write_csv_values_round_trip(sample_reports):
 
 
 # ---------------------------------------------------------------------------
+# write_json
+# ---------------------------------------------------------------------------
+
+def test_write_json_is_valid_json(sample_reports):
+    buf = io.StringIO()
+    pskreporter.write_json(sample_reports, buf)
+    data = json.loads(buf.getvalue())
+    assert isinstance(data, list)
+    assert len(data) == 3
+
+
+def test_write_json_fields_present(sample_reports):
+    buf = io.StringIO()
+    pskreporter.write_json(sample_reports, buf)
+    row = json.loads(buf.getvalue())[0]
+    for field in pskreporter.CSV_FIELDS:
+        assert field in row
+
+
+def test_write_json_values(sample_reports):
+    buf = io.StringIO()
+    pskreporter.write_json(sample_reports, buf)
+    row = json.loads(buf.getvalue())[0]
+    assert row["sender_callsign"] == "N1DQ"
+    assert row["mode"] == "FT8"
+    assert row["frequency_hz"] == 14_074_000
+
+
+def test_write_json_empty():
+    buf = io.StringIO()
+    pskreporter.write_json([], buf)
+    assert json.loads(buf.getvalue()) == []
+
+
+# ---------------------------------------------------------------------------
 # main — dry-run / --test flag
 # ---------------------------------------------------------------------------
 
@@ -339,6 +374,45 @@ def test_main_output_sorted_newest_first():
         assert timestamps == sorted(timestamps, reverse=True)
     finally:
         os.unlink(path)
+
+
+# ---------------------------------------------------------------------------
+# main — --json flag
+# ---------------------------------------------------------------------------
+
+def test_main_json_stdout(capsys):
+    with patch("sys.argv", ["pskreporter.py", "N1DQ", "--json"]):
+        with patch("pskreporter.fetch_xml", return_value=SAMPLE_XML):
+            pskreporter.main()
+    out = capsys.readouterr().out
+    data = json.loads(out)
+    assert isinstance(data, list)
+    assert len(data) == 3
+    assert data[0]["sender_callsign"] == "N1DQ"
+
+
+def test_main_json_to_file():
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+        path = f.name
+    try:
+        with patch("sys.argv", ["pskreporter.py", "N1DQ", "--json", "-o", path]):
+            with patch("pskreporter.fetch_xml", return_value=SAMPLE_XML):
+                pskreporter.main()
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+        assert len(data) == 3
+        assert data[0]["mode"] == "FT8"
+    finally:
+        os.unlink(path)
+
+
+def test_main_json_sorted_newest_first(capsys):
+    with patch("sys.argv", ["pskreporter.py", "N1DQ", "--json"]):
+        with patch("pskreporter.fetch_xml", return_value=SAMPLE_XML):
+            pskreporter.main()
+    data = json.loads(capsys.readouterr().out)
+    timestamps = [r["flow_start_seconds"] for r in data]
+    assert timestamps == sorted(timestamps, reverse=True)
 
 
 # ---------------------------------------------------------------------------

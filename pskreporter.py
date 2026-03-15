@@ -66,7 +66,7 @@ CSV_FIELDS = [
     "flow_start_seconds",
 ]
 
-__version__ = "0.2"
+__version__ = "0.3"
 
 COOLDOWN_SECONDS = 300  # pskreporter.info asks for at least 5 minutes between queries
 
@@ -197,6 +197,11 @@ def write_csv(reports: list[dict], dest) -> None:
     writer.writerows(reports)
 
 
+def write_json(reports: list[dict], dest) -> None:
+    json.dump(reports, dest, indent=2)
+    dest.write("\n")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Fetch reception reports for a callsign from pskreporter.info",
@@ -226,6 +231,11 @@ def main() -> None:
         "--band",
         metavar="METRES",
         help="Filter by band in metres, e.g. 40, 20, 10",
+    )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Output as JSON array instead of CSV",
     )
     parser.add_argument(
         "--test",
@@ -282,16 +292,20 @@ def main() -> None:
         file=sys.stderr,
     )
 
+    write_output = write_json if args.json else write_csv
+    fmt_label = "JSON" if args.json else "CSV"
+
     if args.output:
         try:
-            with open(args.output, "w", newline="", encoding="utf-8") as fh:
-                write_csv(reports, fh)
-            print(f"[info] CSV written to {args.output}", file=sys.stderr)
+            newline = "" if not args.json else None
+            with open(args.output, "w", newline=newline, encoding="utf-8") as fh:
+                write_output(reports, fh)
+            print(f"[info] {fmt_label} written to {args.output}", file=sys.stderr)
         except OSError as exc:
             print(f"[error] Could not write output file: {exc}", file=sys.stderr)
             sys.exit(1)
     else:
-        write_csv(reports, sys.stdout)
+        write_output(reports, sys.stdout)
 
 
 if __name__ == "__main__":
