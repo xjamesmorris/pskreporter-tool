@@ -1,9 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "WebFetch(domain:pskreporter.info)",
-      "Bash(git:*)",
-      "Bash(python3:*)"
-    ]
-  }
-}
