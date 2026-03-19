@@ -121,26 +121,52 @@ def test_freq_to_band_out_of_band(freq_hz):
 # build_url
 # ---------------------------------------------------------------------------
 
+def test_build_url_default_uses_callsign_param():
+    url = pskreporter.build_url("N1DQ")
+    assert "callsign=N1DQ" in url
+    assert "senderCallsign" not in url
+    assert "receiverCallsign" not in url
+
+
 def test_build_url_callsign_uppercased():
-    assert "senderCallsign=N1DQ" in pskreporter.build_url("n1dq", 6)
+    assert "callsign=N1DQ" in pskreporter.build_url("n1dq")
 
 
-def test_build_url_flow_start_seconds():
-    assert "flowStartSeconds=-21600" in pskreporter.build_url("N1DQ", 6)
+def test_build_url_tx_only():
+    url = pskreporter.build_url("N1DQ", tx_only=True)
+    assert "senderCallsign=N1DQ" in url
+    assert "callsign=" not in url
+
+
+def test_build_url_rx_only():
+    url = pskreporter.build_url("N1DQ", rx_only=True)
+    assert "receiverCallsign=N1DQ" in url
+    assert "callsign=" not in url
+
+
+def test_build_url_no_hours_omits_flow_start():
+    assert "flowStartSeconds" not in pskreporter.build_url("N1DQ")
+
+
+def test_build_url_hours_adds_flow_start():
+    assert "flowStartSeconds=-21600" in pskreporter.build_url("N1DQ", hours=6)
 
 
 def test_build_url_fractional_hours():
-    assert "flowStartSeconds=-1800" in pskreporter.build_url("N1DQ", 0.5)
-
-
-def test_build_url_required_params():
-    url = pskreporter.build_url("W1AW", 2)
-    assert "rronly=1" in url
-    assert "noactive=1" in url
+    assert "flowStartSeconds=-1800" in pskreporter.build_url("N1DQ", hours=0.5)
 
 
 def test_build_url_starts_with_api_base():
-    assert pskreporter.build_url("W1AW", 1).startswith(pskreporter.API_BASE)
+    assert pskreporter.build_url("W1AW").startswith(pskreporter.API_BASE)
+
+
+def test_build_url_default_limit():
+    assert "rptlimit=10" in pskreporter.build_url("N1DQ")
+
+
+def test_build_url_slash_callsign():
+    url = pskreporter.build_url("NO0T/P")
+    assert "callsign=NO0T%2FP" in url
 
 
 # ---------------------------------------------------------------------------
@@ -309,18 +335,16 @@ def test_main_test_flag_prints_url(capsys):
     assert pskreporter.API_BASE in out
 
 
-def test_main_hours_clamped_above_max(capsys):
-    with patch("sys.argv", ["pskreporter.py", "N1DQ", "--hours", "99", "--test"]):
+def test_main_hours_adds_flow_start(capsys):
+    with patch("sys.argv", ["pskreporter.py", "N1DQ", "--hours", "6", "--test"]):
         pskreporter.main()
-    captured = capsys.readouterr()
-    assert "clamped" in captured.err
-    assert "flowStartSeconds=-21600" in captured.out
+    assert "flowStartSeconds=-21600" in capsys.readouterr().out
 
 
-def test_main_hours_clamped_below_min(capsys):
-    with patch("sys.argv", ["pskreporter.py", "N1DQ", "--hours", "0", "--test"]):
+def test_main_no_hours_omits_flow_start(capsys):
+    with patch("sys.argv", ["pskreporter.py", "N1DQ", "--test"]):
         pskreporter.main()
-    assert "clamped" in capsys.readouterr().err
+    assert "flowStartSeconds" not in capsys.readouterr().out
 
 
 # ---------------------------------------------------------------------------

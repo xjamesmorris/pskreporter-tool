@@ -124,14 +124,16 @@ def freq_to_band(freq_hz: int) -> str:
     return ""
 
 
-def build_url(callsign: str, hours: float) -> str:
-    flow_start = -int(hours * 3600)
-    params = {
-        "senderCallsign": callsign.upper(),
-        "flowStartSeconds": str(flow_start),
-        "rronly": "1",       # reception reports only (no active monitor list)
-        "noactive": "1",     # suppress active callsign list
-    }
+def build_url(callsign: str, hours: float | None = None, tx_only: bool = False, rx_only: bool = False, limit: int = 10) -> str:
+    if tx_only:
+        callsign_param = "senderCallsign"
+    elif rx_only:
+        callsign_param = "receiverCallsign"
+    else:
+        callsign_param = "callsign"
+    params = {callsign_param: callsign.upper(), "rptlimit": str(limit)}
+    if hours is not None:
+        params["flowStartSeconds"] = str(-int(hours * 3600))
     return f"{API_BASE}?{urllib.parse.urlencode(params)}"
 
 
@@ -218,9 +220,20 @@ def main() -> None:
     parser.add_argument(
         "-t", "--hours",
         type=float,
-        default=6.0,
+        default=None,
         metavar="HOURS",
-        help="Look back this many hours (default: 6; API caps at 6 anyway)",
+        help="Look back this many hours (default: no time limit, up to 50 most recent reports)",
+    )
+    role = parser.add_mutually_exclusive_group()
+    role.add_argument(
+        "--tx",
+        action="store_true",
+        help="Limit to reports where CALLSIGN was transmitting (heard by others)",
+    )
+    role.add_argument(
+        "--rx",
+        action="store_true",
+        help="Limit to reports where CALLSIGN was receiving (what it heard)",
     )
     parser.add_argument(
         "-m", "--mode",
@@ -244,15 +257,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    # Clamp hours to API's 6-hour maximum
-    hours = min(max(args.hours, 0.1), 6.0)
-    if hours != args.hours:
-        print(
-            f"[info] Hours clamped to {hours} (API maximum is 6 hours)",
-            file=sys.stderr,
-        )
-
-    url = build_url(args.callsign, hours)
+    url = build_url(args.callsign, args.hours, tx_only=args.tx, rx_only=args.rx)
 
     if args.test:
         print(url)
@@ -282,9 +287,6 @@ def main() -> None:
 
     # Sort newest-first
     reports.sort(key=lambda r: r["flow_start_seconds"] or 0, reverse=True)
-
-    # Honour the 100-report cap (API usually does this, but be safe)
-    reports = reports[:100]
 
     print(
         f"[info] {total_before_filter} reports received; "
