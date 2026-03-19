@@ -335,6 +335,31 @@ def test_main_test_flag_prints_url(capsys):
     assert pskreporter.API_BASE in out
 
 
+def test_main_verbose_default_behavior(capsys):
+    with patch("sys.argv", ["pskreporter.py", "N1DQ", "--verbose", "--test"]):
+        pskreporter.main()
+    err = capsys.readouterr().err
+    assert "N1DQ" in err
+    assert "both tx and rx" in err
+    assert "no time" in err.lower()
+
+
+def test_main_verbose_tx_and_hours(capsys):
+    with patch("sys.argv", ["pskreporter.py", "N1DQ", "--tx", "--hours", "2", "--verbose", "--test"]):
+        pskreporter.main()
+    err = capsys.readouterr().err
+    assert "transmissions by" in err
+    assert "2 hour" in err
+
+
+def test_main_verbose_filters(capsys):
+    with patch("sys.argv", ["pskreporter.py", "N1DQ", "--mode", "FT8", "--band", "20", "--verbose", "--test"]):
+        pskreporter.main()
+    err = capsys.readouterr().err
+    assert "FT8" in err
+    assert "20m" in err
+
+
 def test_main_hours_adds_flow_start(capsys):
     with patch("sys.argv", ["pskreporter.py", "N1DQ", "--hours", "6", "--test"]):
         pskreporter.main()

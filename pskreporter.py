@@ -255,9 +255,38 @@ def main() -> None:
         action="store_true",
         help="Dry-run: print the request URL to stdout and exit without fetching",
     )
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Print a plain-English summary of the query before fetching",
+    )
     args = parser.parse_args()
 
     url = build_url(args.callsign, args.hours, tx_only=args.tx, rx_only=args.rx)
+
+    if args.verbose:
+        if args.tx:
+            role_desc = "transmissions by"
+        elif args.rx:
+            role_desc = "receptions logged by"
+        else:
+            role_desc = "transmissions and receptions by"
+        if args.hours:
+            time_desc = f"in the last {args.hours:g} hour(s)"
+        else:
+            time_desc = "with no time limit"
+        print(f"[verbose] Querying up to 10 most recent {role_desc} {args.callsign.upper()} {time_desc}.", file=sys.stderr)
+        if not args.tx and not args.rx:
+            print("[verbose] Default: both tx and rx reports returned (use --tx or --rx to narrow).", file=sys.stderr)
+        if args.hours is None:
+            print("[verbose] Default: no time filter applied; server returns up to 10 most recent reports.", file=sys.stderr)
+        if args.mode:
+            print(f"[verbose] Client-side filter: mode = {args.mode.upper()}.", file=sys.stderr)
+        if args.band:
+            print(f"[verbose] Client-side filter: band = {args.band}m.", file=sys.stderr)
+        fmt = "JSON" if args.json else "CSV"
+        dest = args.output if args.output else "stdout"
+        print(f"[verbose] Output: {fmt} to {dest}.", file=sys.stderr)
 
     if args.test:
         print(url)
