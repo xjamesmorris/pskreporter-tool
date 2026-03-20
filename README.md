@@ -70,3 +70,9 @@ pytest
 ```
 
 All tests are in `tests/test_pskreporter.py` and use only the standard library plus pytest (no network calls).
+
+## Contributing
+
+Bug reports and feature requests are welcome via [GitHub Issues](https://github.com/xjamesmorris/pskreporter-tool/issues).
+
+Pull requests are also welcome — fork the repo, make your changes, and open a PR against `main`. All contributions are appreciated!
